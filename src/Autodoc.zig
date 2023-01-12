@@ -146,46 +146,46 @@ pub fn generateZirData(self: *Autodoc) !void {
                     .c_ulonglong_type,
                     .c_longdouble_type,
                     => .{
-                        .Int = .{ .name = tmpbuf.toOwnedSlice() },
+                        .Int = .{ .name = try tmpbuf.toOwnedSlice() },
                     },
                     .f16_type,
                     .f32_type,
                     .f64_type,
                     .f128_type,
                     => .{
-                        .Float = .{ .name = tmpbuf.toOwnedSlice() },
+                        .Float = .{ .name = try tmpbuf.toOwnedSlice() },
                     },
                     .comptime_int_type => .{
-                        .ComptimeInt = .{ .name = tmpbuf.toOwnedSlice() },
+                        .ComptimeInt = .{ .name = try tmpbuf.toOwnedSlice() },
                     },
                     .comptime_float_type => .{
-                        .ComptimeFloat = .{ .name = tmpbuf.toOwnedSlice() },
+                        .ComptimeFloat = .{ .name = try tmpbuf.toOwnedSlice() },
                     },
 
                     .anyopaque_type => .{
-                        .ComptimeExpr = .{ .name = tmpbuf.toOwnedSlice() },
+                        .ComptimeExpr = .{ .name = try tmpbuf.toOwnedSlice() },
                     },
                     .bool_type => .{
-                        .Bool = .{ .name = tmpbuf.toOwnedSlice() },
+                        .Bool = .{ .name = try tmpbuf.toOwnedSlice() },
                     },
 
                     .noreturn_type => .{
-                        .NoReturn = .{ .name = tmpbuf.toOwnedSlice() },
+                        .NoReturn = .{ .name = try tmpbuf.toOwnedSlice() },
                     },
                     .void_type => .{
-                        .Void = .{ .name = tmpbuf.toOwnedSlice() },
+                        .Void = .{ .name = try tmpbuf.toOwnedSlice() },
                     },
                     .type_info_type => .{
-                        .ComptimeExpr = .{ .name = tmpbuf.toOwnedSlice() },
+                        .ComptimeExpr = .{ .name = try tmpbuf.toOwnedSlice() },
                     },
                     .type_type => .{
-                        .Type = .{ .name = tmpbuf.toOwnedSlice() },
+                        .Type = .{ .name = try tmpbuf.toOwnedSlice() },
                     },
                     .anyerror_type => .{
-                        .ErrorSet = .{ .name = tmpbuf.toOwnedSlice() },
+                        .ErrorSet = .{ .name = try tmpbuf.toOwnedSlice() },
                     },
                     .calling_convention_inline, .calling_convention_c, .calling_convention_type => .{
-                        .EnumLiteral = .{ .name = tmpbuf.toOwnedSlice() },
+                        .EnumLiteral = .{ .name = try tmpbuf.toOwnedSlice() },
                     },
                 },
             );
@@ -607,7 +607,6 @@ const DocData = struct {
             is_test: bool = false,
             is_extern: bool = false,
         },
-        BoundFn: struct { name: []const u8 },
         Opaque: struct {
             name: []const u8,
             src: usize, // index into astNodes
@@ -638,9 +637,9 @@ const DocData = struct {
             inline for (comptime std.meta.fields(Type)) |case| {
                 if (@field(Type, case.name) == active_tag) {
                     const current_value = @field(self, case.name);
-                    inline for (comptime std.meta.fields(case.field_type)) |f| {
+                    inline for (comptime std.meta.fields(case.type)) |f| {
                         try jsw.arrayElem();
-                        if (f.field_type == std.builtin.Type.Pointer.Size) {
+                        if (f.type == std.builtin.Type.Pointer.Size) {
                             try jsw.emitNumber(@enumToInt(@field(current_value, f.name)));
                         } else {
                             try std.json.stringify(@field(current_value, f.name), opts, w);
@@ -660,8 +659,8 @@ const DocData = struct {
         comptimeExpr: usize, // index in `comptimeExprs`
         void: struct {},
         @"unreachable": struct {},
-        @"null": struct {},
-        @"undefined": struct {},
+        null: struct {},
+        undefined: struct {},
         @"struct": []FieldVal,
         bool: bool,
         @"anytype": struct {},
@@ -1511,26 +1510,6 @@ fn walkInstruction(
 
         //     return operand;
         // },
-        .overflow_arithmetic_ptr => {
-            const un_node = data[inst_index].un_node;
-
-            const elem_type_ref = try self.walkRef(file, parent_scope, parent_src, un_node.operand, false);
-            const type_slot_index = self.types.items.len;
-            try self.types.append(self.arena, .{
-                .Pointer = .{
-                    .size = .One,
-                    .child = elem_type_ref.expr,
-                    .is_mutable = true,
-                    .is_volatile = false,
-                    .is_allowzero = false,
-                },
-            });
-
-            return DocData.WalkResult{
-                .typeRef = .{ .type = @enumToInt(Ref.type_type) },
-                .expr = .{ .type = type_slot_index },
-            };
-        },
         .ptr_type => {
             const ptr = data[inst_index].ptr_type;
             const extra = file.zir.extraData(Zir.Inst.PtrType, ptr.payload_index);
@@ -2129,7 +2108,15 @@ fn walkInstruction(
                 file,
                 parent_scope,
                 parent_src,
-                getBlockInlineBreak(file.zir, inst_index),
+                getBlockInlineBreak(file.zir, inst_index) orelse {
+                    const res = DocData.WalkResult{ .expr = .{
+                        .comptimeExpr = self.comptime_exprs.items.len,
+                    } };
+                    try self.comptime_exprs.append(self.arena, .{
+                        .code = "if (...) { ... }",
+                    });
+                    return res;
+                },
                 need_type,
             );
         },
@@ -3155,7 +3142,7 @@ fn walkDecls(
             2 => {
                 // decl test
                 const decl_being_tested = scope.resolveDeclName(doc_comment_index);
-                const func_index = getBlockInlineBreak(file.zir, value_index);
+                const func_index = getBlockInlineBreak(file.zir, value_index).?;
 
                 const pl_node = data[Zir.refToIndex(func_index).?].pl_node;
                 const fn_src = try self.srcLocInfo(file, pl_node.src_node, decl_src);
@@ -3811,7 +3798,7 @@ fn analyzeFancyFunction(
                     file,
                     scope,
                     parent_src,
-                    fn_info.body[fn_info.body.len - 1],
+                    fn_info.body[0],
                 );
             } else {
                 break :blk null;
@@ -3820,10 +3807,15 @@ fn analyzeFancyFunction(
         else => null,
     };
 
+    // if we're analyzing a funcion signature (ie without body), we
+    // actually don't have an ast_node reserved for us, but since
+    // we don't have a name, we don't need it.
+    const src = if (fn_info.body.len == 0) 0 else self_ast_node_index;
+
     self.types.items[type_slot_index] = .{
         .Fn = .{
             .name = "todo_name func",
-            .src = self_ast_node_index,
+            .src = src,
             .params = param_type_refs.items,
             .ret = ret_type_ref,
             .generic_ret = generic_ret,
@@ -3949,7 +3941,7 @@ fn analyzeFunction(
                     file,
                     scope,
                     parent_src,
-                    fn_info.body[fn_info.body.len - 1],
+                    fn_info.body[0],
                 );
             } else {
                 break :blk null;
@@ -3968,11 +3960,16 @@ fn analyzeFunction(
         } else break :blk ret_type_ref;
     };
 
+    // if we're analyzing a funcion signature (ie without body), we
+    // actually don't have an ast_node reserved for us, but since
+    // we don't have a name, we don't need it.
+    const src = if (fn_info.body.len == 0) 0 else self_ast_node_index;
+
     self.ast_nodes.items[self_ast_node_index].fields = param_ast_indexes.items;
     self.types.items[type_slot_index] = .{
         .Fn = .{
             .name = "todo_name func",
-            .src = self_ast_node_index,
+            .src = src,
             .params = param_type_refs.items,
             .ret = ret_type,
             .generic_ret = generic_ret,
@@ -3990,11 +3987,25 @@ fn getGenericReturnType(
     file: *File,
     scope: *Scope,
     parent_src: SrcLocInfo, // function decl line
-    body_end: usize,
+    body_main_block: usize,
 ) !DocData.Expr {
-    // TODO: compute the correct line offset
-    const wr = try self.walkInstruction(file, scope, parent_src, body_end - 3, false);
-    return wr.expr;
+    const tags = file.zir.instructions.items(.tag);
+    const data = file.zir.instructions.items(.data);
+
+    // We expect `body_main_block` to be the first instruction
+    // inside the function body, and for it to be a block instruction.
+    const pl_node = data[body_main_block].pl_node;
+    const extra = file.zir.extraData(Zir.Inst.Block, pl_node.payload_index);
+    const maybe_ret_node = file.zir.extra[extra.end..][extra.data.body_len - 4];
+    switch (tags[maybe_ret_node]) {
+        .ret_node, .ret_load => {
+            const wr = try self.walkInstruction(file, scope, parent_src, maybe_ret_node, false);
+            return wr.expr;
+        },
+        else => {
+            return DocData.Expr{ .comptimeExpr = 0 };
+        },
+    }
 }
 
 fn collectUnionFieldInfo(
@@ -4209,7 +4220,7 @@ fn walkRef(
                 );
             },
             .undef => {
-                return DocData.WalkResult{ .expr = .@"undefined" };
+                return DocData.WalkResult{ .expr = .undefined };
             },
             .zero => {
                 return DocData.WalkResult{
@@ -4237,7 +4248,7 @@ fn walkRef(
                 };
             },
             .null_value => {
-                return DocData.WalkResult{ .expr = .@"null" };
+                return DocData.WalkResult{ .expr = .null };
             },
             .bool_true => {
                 return DocData.WalkResult{
@@ -4301,12 +4312,13 @@ fn walkRef(
     }
 }
 
-fn getBlockInlineBreak(zir: Zir, inst_index: usize) Zir.Inst.Ref {
+fn getBlockInlineBreak(zir: Zir, inst_index: usize) ?Zir.Inst.Ref {
     const tags = zir.instructions.items(.tag);
     const data = zir.instructions.items(.data);
     const pl_node = data[inst_index].pl_node;
     const extra = zir.extraData(Zir.Inst.Block, pl_node.payload_index);
     const break_index = zir.extra[extra.end..][extra.data.body_len - 1];
+    if (tags[break_index] == .condbr_inline) return null;
     std.debug.assert(tags[break_index] == .break_inline);
     return data[break_index].@"break".operand;
 }

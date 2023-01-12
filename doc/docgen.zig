@@ -471,7 +471,7 @@ fn genToc(allocator: Allocator, tokenizer: *Tokenizer) !Toc {
                             },
                             Token.Id.Separator => {},
                             Token.Id.BracketClose => {
-                                try nodes.append(Node{ .SeeAlso = list.toOwnedSlice() });
+                                try nodes.append(Node{ .SeeAlso = try list.toOwnedSlice() });
                                 break;
                             },
                             else => return parseError(tokenizer, see_also_tok, "invalid see_also token", .{}),
@@ -610,7 +610,7 @@ fn genToc(allocator: Allocator, tokenizer: *Tokenizer) !Toc {
                             .source_token = source_token,
                             .just_check_syntax = just_check_syntax,
                             .mode = mode,
-                            .link_objects = link_objects.toOwnedSlice(),
+                            .link_objects = try link_objects.toOwnedSlice(),
                             .target_str = target_str,
                             .link_libc = link_libc,
                             .backend_stage1 = backend_stage1,
@@ -696,7 +696,7 @@ fn genToc(allocator: Allocator, tokenizer: *Tokenizer) !Toc {
                             );
                         }
                         _ = try eatToken(tokenizer, Token.Id.BracketClose);
-                    } else unreachable; // TODO issue #707
+                    };
                     try nodes.append(Node{ .SyntaxBlock = SyntaxBlock{ .source_type = source_type, .name = name, .source_token = source_token } });
                 } else {
                     return parseError(tokenizer, tag_token, "unrecognized tag name: {s}", .{tag_name});
@@ -707,8 +707,8 @@ fn genToc(allocator: Allocator, tokenizer: *Tokenizer) !Toc {
     }
 
     return Toc{
-        .nodes = nodes.toOwnedSlice(),
-        .toc = toc_buf.toOwnedSlice(),
+        .nodes = try nodes.toOwnedSlice(),
+        .toc = try toc_buf.toOwnedSlice(),
         .urls = urls,
     };
 }
@@ -729,7 +729,7 @@ fn urlize(allocator: Allocator, input: []const u8) ![]u8 {
             else => {},
         }
     }
-    return buf.toOwnedSlice();
+    return try buf.toOwnedSlice();
 }
 
 fn escapeHtml(allocator: Allocator, input: []const u8) ![]u8 {
@@ -738,7 +738,7 @@ fn escapeHtml(allocator: Allocator, input: []const u8) ![]u8 {
 
     const out = buf.writer();
     try writeEscaped(out, input);
-    return buf.toOwnedSlice();
+    return try buf.toOwnedSlice();
 }
 
 fn writeEscaped(out: anytype, input: []const u8) !void {
@@ -760,17 +760,6 @@ fn writeEscaped(out: anytype, input: []const u8) !void {
 //#define VT_BOLD "\x1b[0;1m"
 //#define VT_RESET "\x1b[0m"
 
-const TermState = enum {
-    Start,
-    Escape,
-    LBracket,
-    Number,
-    AfterNumber,
-    Arg,
-    ArgNumber,
-    ExpectEnd,
-};
-
 test "term color" {
     const input_bytes = "A\x1b[32;1mgreen\x1b[0mB";
     const result = try termColor(std.testing.allocator, input_bytes);
@@ -787,61 +776,80 @@ fn termColor(allocator: Allocator, input: []const u8) ![]u8 {
     var first_number: usize = undefined;
     var second_number: usize = undefined;
     var i: usize = 0;
-    var state = TermState.Start;
+    var state: enum {
+        start,
+        escape,
+        lbracket,
+        number,
+        after_number,
+        arg,
+        arg_number,
+        expect_end,
+    } = .start;
+    var last_new_line: usize = 0;
     var open_span_count: usize = 0;
     while (i < input.len) : (i += 1) {
         const c = input[i];
         switch (state) {
-            TermState.Start => switch (c) {
-                '\x1b' => state = TermState.Escape,
+            .start => switch (c) {
+                '\x1b' => state = .escape,
+                '\n' => {
+                    try out.writeByte(c);
+                    last_new_line = buf.items.len;
+                },
                 else => try out.writeByte(c),
             },
-            TermState.Escape => switch (c) {
-                '[' => state = TermState.LBracket,
+            .escape => switch (c) {
+                '[' => state = .lbracket,
                 else => return error.UnsupportedEscape,
             },
-            TermState.LBracket => switch (c) {
+            .lbracket => switch (c) {
                 '0'...'9' => {
                     number_start_index = i;
-                    state = TermState.Number;
+                    state = .number;
                 },
                 else => return error.UnsupportedEscape,
             },
-            TermState.Number => switch (c) {
+            .number => switch (c) {
                 '0'...'9' => {},
                 else => {
                     first_number = std.fmt.parseInt(usize, input[number_start_index..i], 10) catch unreachable;
                     second_number = 0;
-                    state = TermState.AfterNumber;
+                    state = .after_number;
                     i -= 1;
                 },
             },
 
-            TermState.AfterNumber => switch (c) {
-                ';' => state = TermState.Arg,
+            .after_number => switch (c) {
+                ';' => state = .arg,
+                'D' => state = .start,
+                'K' => {
+                    buf.items.len = last_new_line;
+                    state = .start;
+                },
                 else => {
-                    state = TermState.ExpectEnd;
+                    state = .expect_end;
                     i -= 1;
                 },
             },
-            TermState.Arg => switch (c) {
+            .arg => switch (c) {
                 '0'...'9' => {
                     number_start_index = i;
-                    state = TermState.ArgNumber;
+                    state = .arg_number;
                 },
                 else => return error.UnsupportedEscape,
             },
-            TermState.ArgNumber => switch (c) {
+            .arg_number => switch (c) {
                 '0'...'9' => {},
                 else => {
                     second_number = std.fmt.parseInt(usize, input[number_start_index..i], 10) catch unreachable;
-                    state = TermState.ExpectEnd;
+                    state = .expect_end;
                     i -= 1;
                 },
             },
-            TermState.ExpectEnd => switch (c) {
+            .expect_end => switch (c) {
                 'm' => {
-                    state = TermState.Start;
+                    state = .start;
                     while (open_span_count != 0) : (open_span_count -= 1) {
                         try out.writeAll("</span>");
                     }
@@ -854,7 +862,7 @@ fn termColor(allocator: Allocator, input: []const u8) ![]u8 {
             },
         }
     }
-    return buf.toOwnedSlice();
+    return try buf.toOwnedSlice();
 }
 
 const builtin_types = [_][]const u8{

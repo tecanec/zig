@@ -67,6 +67,8 @@ ZIG_EXTERN_C LLVMTargetMachineRef ZigLLVMCreateTargetMachine(LLVMTargetRef T, co
 
 ZIG_EXTERN_C LLVMTypeRef ZigLLVMTokenTypeInContext(LLVMContextRef context_ref);
 
+ZIG_EXTERN_C void ZigLLVMSetOptBisectLimit(LLVMContextRef context_ref, int limit);
+
 ZIG_EXTERN_C LLVMValueRef ZigLLVMAddFunctionInAddressSpace(LLVMModuleRef M, const char *Name,
         LLVMTypeRef FunctionTy, unsigned AddressSpace);
 
@@ -129,6 +131,8 @@ ZIG_EXTERN_C LLVMValueRef ZigLLVMBuildCall(LLVMBuilderRef B, LLVMTypeRef functio
         LLVMValueRef Fn, LLVMValueRef *Args, unsigned NumArgs, enum ZigLLVM_CallingConv CC,
         enum ZigLLVM_CallAttr attr, const char *Name);
 
+ZIG_EXTERN_C void ZigLLVMAddAttributeAtIndex(LLVMValueRef Val, unsigned Idx, LLVMAttributeRef A);
+
 ZIG_EXTERN_C LLVMValueRef ZigLLVMBuildMemCpy(LLVMBuilderRef B, LLVMValueRef Dst, unsigned DstAlign,
         LLVMValueRef Src, unsigned SrcAlign, LLVMValueRef Size, bool isVolatile);
 
@@ -176,7 +180,11 @@ ZIG_EXTERN_C struct ZigLLVMDIType *ZigLLVMCreateDebugArrayType(struct ZigLLVMDIB
         int elem_count);
 
 ZIG_EXTERN_C struct ZigLLVMDIEnumerator *ZigLLVMCreateDebugEnumerator(struct ZigLLVMDIBuilder *dibuilder,
-        const char *name, int64_t val);
+        const char *name, uint64_t val, bool isUnsigned);
+
+
+ZIG_EXTERN_C struct ZigLLVMDIEnumerator *ZigLLVMCreateDebugEnumeratorOfArbitraryPrecision(struct ZigLLVMDIBuilder *dibuilder,
+        const char *name, unsigned NumWords, const uint64_t Words[], unsigned int bits, bool isUnsigned);
 
 ZIG_EXTERN_C struct ZigLLVMDIType *ZigLLVMCreateDebugEnumerationType(struct ZigLLVMDIBuilder *dibuilder,
         struct ZigLLVMDIScope *scope, const char *name, struct ZigLLVMDIFile *file, unsigned line_number,
@@ -331,7 +339,6 @@ ZIG_EXTERN_C void ZigLLVMParseCommandLineOptions(size_t argc, const char *const 
 
 // synchronize with llvm/include/ADT/Triple.h::ArchType
 // synchronize with std.Target.Cpu.Arch
-// synchronize with src/stage1/target.cpp::arch_list
 // synchronize with codegen/llvm/bindings.zig::ArchType
 enum ZigLLVM_ArchType {
     ZigLLVM_UnknownArch,
@@ -422,7 +429,6 @@ enum ZigLLVM_VendorType {
 // synchronize with llvm/include/ADT/Triple.h::OsType
 // synchronize with std.Target.Os.Tag
 // synchronize with codegen/llvm/bindings.zig::OsType
-// synchronize with src/stage1/target.cpp::os_list
 enum ZigLLVM_OSType {
     ZigLLVM_UnknownOS,
 

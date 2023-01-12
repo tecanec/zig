@@ -86,16 +86,18 @@ pub fn VectorCount(comptime VectorType: type) type {
 
 /// Returns a vector containing the first `len` integers in order from 0 to `len`-1.
 /// For example, `iota(i32, 8)` will return a vector containing `.{0, 1, 2, 3, 4, 5, 6, 7}`.
-pub fn iota(comptime T: type, comptime len: usize) @Vector(len, T) {
-    var out: [len]T = undefined;
-    for (out) |*element, i| {
-        element.* = switch (@typeInfo(T)) {
-            .Int => @intCast(T, i),
-            .Float => @intToFloat(T, i),
-            else => @compileError("Can't use type " ++ @typeName(T) ++ " in iota."),
-        };
+pub inline fn iota(comptime T: type, comptime len: usize) @Vector(len, T) {
+    comptime {
+        var out: [len]T = undefined;
+        for (out) |*element, i| {
+            element.* = switch (@typeInfo(T)) {
+                .Int => @intCast(T, i),
+                .Float => @intToFloat(T, i),
+                else => @compileError("Can't use type " ++ @typeName(T) ++ " in iota."),
+            };
+        }
+        return @as(@Vector(len, T), out);
     }
-    return @as(@Vector(len, T), out);
 }
 
 /// Returns a vector containing the same elements as the input, but repeated until the desired length is reached.
@@ -191,9 +193,7 @@ pub fn extract(
 }
 
 test "vector patterns" {
-    if ((builtin.zig_backend == .stage1 or builtin.zig_backend == .stage2_llvm) and
-        builtin.cpu.arch == .aarch64)
-    {
+    if (builtin.zig_backend == .stage2_llvm and builtin.cpu.arch == .aarch64) {
         // https://github.com/ziglang/zig/issues/12012
         return error.SkipZigTest;
     }
@@ -419,7 +419,7 @@ test "vector prefix scan" {
         return error.SkipZigTest;
     }
 
-    if (builtin.zig_backend == .stage1 or builtin.zig_backend == .stage2_llvm) {
+    if (builtin.zig_backend == .stage2_llvm) {
         // Regressed in LLVM 14:
         // https://github.com/llvm/llvm-project/issues/55522
         return error.SkipZigTest;

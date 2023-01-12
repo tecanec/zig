@@ -121,6 +121,8 @@ pub const Options = struct {
     z_nocopyreloc: bool,
     z_now: bool,
     z_relro: bool,
+    z_common_page_size: ?u64,
+    z_max_page_size: ?u64,
     tsaware: bool,
     nxcompat: bool,
     dynamicbase: bool,
@@ -128,6 +130,7 @@ pub const Options = struct {
     compress_debug_sections: CompressDebugSections,
     bind_global_refs_locally: bool,
     import_memory: bool,
+    import_symbols: bool,
     import_table: bool,
     export_table: bool,
     initial_memory: ?u64,
@@ -155,7 +158,6 @@ pub const Options = struct {
     build_id: bool,
     disable_lld_caching: bool,
     is_test: bool,
-    use_stage1: bool,
     hash_style: HashStyle,
     major_subsystem_version: ?u32,
     minor_subsystem_version: ?u32,
@@ -169,6 +171,7 @@ pub const Options = struct {
     print_gc_sections: bool,
     print_icf_sections: bool,
     print_map: bool,
+    opt_bisect_limit: i32,
 
     objects: []Compilation.LinkObject,
     framework_dirs: []const []const u8,
@@ -218,13 +221,25 @@ pub const Options = struct {
     /// (Darwin) remove dylibs that are unreachable by the entry point or exported symbols
     dead_strip_dylibs: bool = false,
 
+    /// (Windows) PDB source path prefix to instruct the linker how to resolve relative
+    /// paths when consolidating CodeView streams into a single PDB file.
+    pdb_source_path: ?[]const u8 = null,
+
+    /// (Windows) PDB output path
+    pdb_out_path: ?[]const u8 = null,
+
+    /// (Windows) .def file to specify when linking
+    module_definition_file: ?[]const u8 = null,
+
     pub fn effectiveOutputMode(options: Options) std.builtin.OutputMode {
         return if (options.use_lld) .Obj else options.output_mode;
     }
 
     pub fn move(self: *Options) Options {
         const copied_state = self.*;
+        self.frameworks = .{};
         self.system_libs = .{};
+        self.force_undefined_symbols = .{};
         return copied_state;
     }
 };
@@ -289,8 +304,7 @@ pub const File = struct {
             return &(try MachO.openPath(allocator, options)).base;
         }
 
-        const use_stage1 = build_options.have_stage1 and options.use_stage1;
-        if (use_stage1 or options.emit == null) {
+        if (options.emit == null) {
             return switch (options.target.ofmt) {
                 .coff => &(try Coff.createEmpty(allocator, options)).base,
                 .elf => &(try Elf.createEmpty(allocator, options)).base,
@@ -457,6 +471,7 @@ pub const File = struct {
         Unseekable,
         PermissionDenied,
         SwapFile,
+        CorruptedData,
         SystemResources,
         OperationAborted,
         BrokenPipe,
@@ -625,7 +640,9 @@ pub const File = struct {
         base.releaseLock();
         if (base.file) |f| f.close();
         if (base.intermediary_basename) |sub_path| base.allocator.free(sub_path);
+        base.options.frameworks.deinit(base.allocator);
         base.options.system_libs.deinit(base.allocator);
+        base.options.force_undefined_symbols.deinit(base.allocator);
         switch (base.tag) {
             .coff => {
                 if (build_options.only_c) unreachable;
@@ -978,24 +995,7 @@ pub const File = struct {
 
         // If there is no Zig code to compile, then we should skip flushing the output file
         // because it will not be part of the linker line anyway.
-        const module_obj_path: ?[]const u8 = if (base.options.module) |module| blk: {
-            const use_stage1 = build_options.have_stage1 and base.options.use_stage1;
-            if (use_stage1) {
-                const obj_basename = try std.zig.binNameAlloc(arena, .{
-                    .root_name = base.options.root_name,
-                    .target = base.options.target,
-                    .output_mode = .Obj,
-                });
-                switch (base.options.cache_mode) {
-                    .incremental => break :blk try module.zig_cache_artifact_directory.join(
-                        arena,
-                        &[_][]const u8{obj_basename},
-                    ),
-                    .whole => break :blk try fs.path.join(arena, &.{
-                        fs.path.dirname(full_out_path_z).?, obj_basename,
-                    }),
-                }
-            }
+        const module_obj_path: ?[]const u8 = if (base.options.module != null) blk: {
             try base.flushModule(comp, prog_node);
 
             const dirname = fs.path.dirname(full_out_path_z) orelse ".";

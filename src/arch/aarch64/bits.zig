@@ -4,13 +4,15 @@ const DW = std.dwarf;
 const assert = std.debug.assert;
 const testing = std.testing;
 
+/// Disjoint sets of registers. Every register must belong to
+/// exactly one register class.
 pub const RegisterClass = enum {
     general_purpose,
     stack_pointer,
     floating_point,
 };
 
-/// General purpose registers in the AArch64 instruction set
+/// Registers in the AArch64 instruction set
 pub const Register = enum(u8) {
     // zig fmt: off
     // 64-bit general-purpose registers
@@ -295,6 +297,13 @@ pub const Register = enum(u8) {
 
     pub fn dwarfLocOp(self: Register) u8 {
         return @as(u8, self.enc()) + DW.OP.reg0;
+    }
+
+    /// DWARF encodings that push a value onto the DWARF stack that is either
+    /// the contents of a register or the result of adding the contents a given
+    /// register to a given signed offset.
+    pub fn dwarfLocOpDeref(self: Register) u8 {
+        return @as(u8, self.enc()) + DW.OP.breg0;
     }
 };
 

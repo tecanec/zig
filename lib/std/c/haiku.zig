@@ -1,4 +1,5 @@
 const std = @import("../std.zig");
+const assert = std.debug.assert;
 const builtin = @import("builtin");
 const maxInt = std.math.maxInt;
 const iovec = std.os.iovec;
@@ -339,7 +340,16 @@ pub const sockaddr = extern struct {
     data: [14]u8,
 
     pub const SS_MAXSIZE = 128;
-    pub const storage = std.x.os.Socket.Address.Native.Storage;
+    pub const storage = extern struct {
+        len: u8 align(8),
+        family: sa_family_t,
+        padding: [126]u8 = undefined,
+
+        comptime {
+            assert(@sizeOf(storage) == SS_MAXSIZE);
+            assert(@alignOf(storage) == 8);
+        }
+    };
 
     pub const in = extern struct {
         len: u8 = @sizeOf(in),
@@ -742,7 +752,7 @@ const NSIG = 32;
 
 /// Renamed from `sigaction` to `Sigaction` to avoid conflict with the syscall.
 pub const Sigaction = extern struct {
-    pub const handler_fn = std.meta.FnPtr(fn (i32) callconv(.C) void);
+    pub const handler_fn = *const fn (i32) align(1) callconv(.C) void;
 
     /// signal handler
     __sigaction_u: extern union {

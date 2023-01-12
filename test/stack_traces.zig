@@ -5,13 +5,13 @@ const tests = @import("tests.zig");
 pub fn addCases(cases: *tests.StackTracesContext) void {
     cases.addCase(.{
         .name = "return",
-        .source = 
+        .source =
         \\pub fn main() !void {
         \\    return error.TheSkyIsFalling;
         \\}
         ,
         .Debug = .{
-            .expect = 
+            .expect =
             \\error: TheSkyIsFalling
             \\source.zig:2:5: [address] in main (test)
             \\    return error.TheSkyIsFalling;
@@ -24,7 +24,7 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
                 .windows, // TODO
                 .linux, // defeated by aggressive inlining
             },
-            .expect = 
+            .expect =
             \\error: TheSkyIsFalling
             \\source.zig:2:5: [address] in [function]
             \\    return error.TheSkyIsFalling;
@@ -33,13 +33,13 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
             ,
         },
         .ReleaseFast = .{
-            .expect = 
+            .expect =
             \\error: TheSkyIsFalling
             \\
             ,
         },
         .ReleaseSmall = .{
-            .expect = 
+            .expect =
             \\error: TheSkyIsFalling
             \\
             ,
@@ -48,7 +48,7 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
 
     cases.addCase(.{
         .name = "try return",
-        .source = 
+        .source =
         \\fn foo() !void {
         \\    return error.TheSkyIsFalling;
         \\}
@@ -58,7 +58,7 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
         \\}
         ,
         .Debug = .{
-            .expect = 
+            .expect =
             \\error: TheSkyIsFalling
             \\source.zig:2:5: [address] in foo (test)
             \\    return error.TheSkyIsFalling;
@@ -73,7 +73,7 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
             .exclude_os = .{
                 .windows, // TODO
             },
-            .expect = 
+            .expect =
             \\error: TheSkyIsFalling
             \\source.zig:2:5: [address] in [function]
             \\    return error.TheSkyIsFalling;
@@ -85,13 +85,13 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
             ,
         },
         .ReleaseFast = .{
-            .expect = 
+            .expect =
             \\error: TheSkyIsFalling
             \\
             ,
         },
         .ReleaseSmall = .{
-            .expect = 
+            .expect =
             \\error: TheSkyIsFalling
             \\
             ,
@@ -99,7 +99,7 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
     });
     cases.addCase(.{
         .name = "non-error return pops error trace",
-        .source = 
+        .source =
         \\fn bar() !void {
         \\    return error.UhOh;
         \\}
@@ -116,7 +116,7 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
         \\}
         ,
         .Debug = .{
-            .expect = 
+            .expect =
             \\error: UnrelatedError
             \\source.zig:13:5: [address] in main (test)
             \\    return error.UnrelatedError;
@@ -129,7 +129,7 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
                 .windows, // TODO
                 .linux, // defeated by aggressive inlining
             },
-            .expect = 
+            .expect =
             \\error: UnrelatedError
             \\source.zig:13:5: [address] in [function]
             \\    return error.UnrelatedError;
@@ -138,13 +138,64 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
             ,
         },
         .ReleaseFast = .{
-            .expect = 
+            .expect =
             \\error: UnrelatedError
             \\
             ,
         },
         .ReleaseSmall = .{
-            .expect = 
+            .expect =
+            \\error: UnrelatedError
+            \\
+            ,
+        },
+    });
+
+    cases.addCase(.{
+        .name = "continue in while loop",
+        .source =
+        \\fn foo() !void {
+        \\    return error.UhOh;
+        \\}
+        \\
+        \\pub fn main() !void {
+        \\    var i: usize = 0;
+        \\    while (i < 3) : (i += 1) {
+        \\        foo() catch continue;
+        \\    }
+        \\    return error.UnrelatedError;
+        \\}
+        ,
+        .Debug = .{
+            .expect =
+            \\error: UnrelatedError
+            \\source.zig:10:5: [address] in main (test)
+            \\    return error.UnrelatedError;
+            \\    ^
+            \\
+            ,
+        },
+        .ReleaseSafe = .{
+            .exclude_os = .{
+                .windows, // TODO
+                .linux, // defeated by aggressive inlining
+            },
+            .expect =
+            \\error: UnrelatedError
+            \\source.zig:10:5: [address] in [function]
+            \\    return error.UnrelatedError;
+            \\    ^
+            \\
+            ,
+        },
+        .ReleaseFast = .{
+            .expect =
+            \\error: UnrelatedError
+            \\
+            ,
+        },
+        .ReleaseSmall = .{
+            .expect =
             \\error: UnrelatedError
             \\
             ,
@@ -153,7 +204,7 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
 
     cases.addCase(.{
         .name = "try return + handled catch/if-else",
-        .source = 
+        .source =
         \\fn foo() !void {
         \\    return error.TheSkyIsFalling;
         \\}
@@ -167,7 +218,7 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
         \\}
         ,
         .Debug = .{
-            .expect = 
+            .expect =
             \\error: TheSkyIsFalling
             \\source.zig:2:5: [address] in foo (test)
             \\    return error.TheSkyIsFalling;
@@ -183,7 +234,7 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
                 .windows, // TODO
                 .linux, // defeated by aggressive inlining
             },
-            .expect = 
+            .expect =
             \\error: TheSkyIsFalling
             \\source.zig:2:5: [address] in [function]
             \\    return error.TheSkyIsFalling;
@@ -195,13 +246,13 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
             ,
         },
         .ReleaseFast = .{
-            .expect = 
+            .expect =
             \\error: TheSkyIsFalling
             \\
             ,
         },
         .ReleaseSmall = .{
-            .expect = 
+            .expect =
             \\error: TheSkyIsFalling
             \\
             ,
@@ -210,7 +261,7 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
 
     cases.addCase(.{
         .name = "break from inline loop pops error return trace",
-        .source = 
+        .source =
         \\fn foo() !void { return error.FooBar; }
         \\
         \\pub fn main() !void {
@@ -226,7 +277,7 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
         \\}
         ,
         .Debug = .{
-            .expect = 
+            .expect =
             \\error: BadTime
             \\source.zig:12:5: [address] in main (test)
             \\    return error.BadTime;
@@ -239,7 +290,7 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
                 .windows, // TODO
                 .linux, // defeated by aggressive inlining
             },
-            .expect = 
+            .expect =
             \\error: BadTime
             \\source.zig:12:5: [address] in [function]
             \\    return error.BadTime;
@@ -248,13 +299,13 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
             ,
         },
         .ReleaseFast = .{
-            .expect = 
+            .expect =
             \\error: BadTime
             \\
             ,
         },
         .ReleaseSmall = .{
-            .expect = 
+            .expect =
             \\error: BadTime
             \\
             ,
@@ -263,7 +314,7 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
 
     cases.addCase(.{
         .name = "catch and re-throw error",
-        .source = 
+        .source =
         \\fn foo() !void {
         \\    return error.TheSkyIsFalling;
         \\}
@@ -273,7 +324,7 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
         \\}
         ,
         .Debug = .{
-            .expect = 
+            .expect =
             \\error: AndMyCarIsOutOfGas
             \\source.zig:2:5: [address] in foo (test)
             \\    return error.TheSkyIsFalling;
@@ -289,7 +340,7 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
                 .windows, // TODO
                 .linux, // defeated by aggressive inlining
             },
-            .expect = 
+            .expect =
             \\error: AndMyCarIsOutOfGas
             \\source.zig:2:5: [address] in [function]
             \\    return error.TheSkyIsFalling;
@@ -301,13 +352,13 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
             ,
         },
         .ReleaseFast = .{
-            .expect = 
+            .expect =
             \\error: AndMyCarIsOutOfGas
             \\
             ,
         },
         .ReleaseSmall = .{
-            .expect = 
+            .expect =
             \\error: AndMyCarIsOutOfGas
             \\
             ,
@@ -316,7 +367,7 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
 
     cases.addCase(.{
         .name = "errors stored in var do not contribute to error trace",
-        .source = 
+        .source =
         \\fn foo() !void {
         \\    return error.TheSkyIsFalling;
         \\}
@@ -331,7 +382,7 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
         \\}
         ,
         .Debug = .{
-            .expect = 
+            .expect =
             \\error: SomethingUnrelatedWentWrong
             \\source.zig:11:5: [address] in main (test)
             \\    return error.SomethingUnrelatedWentWrong;
@@ -344,7 +395,7 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
                 .windows, // TODO
                 .linux, // defeated by aggressive inlining
             },
-            .expect = 
+            .expect =
             \\error: SomethingUnrelatedWentWrong
             \\source.zig:11:5: [address] in [function]
             \\    return error.SomethingUnrelatedWentWrong;
@@ -353,13 +404,13 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
             ,
         },
         .ReleaseFast = .{
-            .expect = 
+            .expect =
             \\error: SomethingUnrelatedWentWrong
             \\
             ,
         },
         .ReleaseSmall = .{
-            .expect = 
+            .expect =
             \\error: SomethingUnrelatedWentWrong
             \\
             ,
@@ -368,7 +419,7 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
 
     cases.addCase(.{
         .name = "error stored in const has trace preserved for duration of block",
-        .source = 
+        .source =
         \\fn foo() !void { return error.TheSkyIsFalling; }
         \\fn bar() !void { return error.InternalError; }
         \\fn baz() !void { return error.UnexpectedReality; }
@@ -395,7 +446,7 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
         \\}
         ,
         .Debug = .{
-            .expect = 
+            .expect =
             \\error: StillUnresolved
             \\source.zig:1:18: [address] in foo (test)
             \\fn foo() !void { return error.TheSkyIsFalling; }
@@ -414,7 +465,7 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
                 .windows, // TODO
                 .linux, // defeated by aggressive inlining
             },
-            .expect = 
+            .expect =
             \\error: StillUnresolved
             \\source.zig:1:18: [address] in [function]
             \\fn foo() !void { return error.TheSkyIsFalling; }
@@ -429,13 +480,13 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
             ,
         },
         .ReleaseFast = .{
-            .expect = 
+            .expect =
             \\error: StillUnresolved
             \\
             ,
         },
         .ReleaseSmall = .{
-            .expect = 
+            .expect =
             \\error: StillUnresolved
             \\
             ,
@@ -444,7 +495,7 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
 
     cases.addCase(.{
         .name = "error passed to function has its trace preserved for duration of the call",
-        .source = 
+        .source =
         \\pub fn expectError(expected_error: anyerror, actual_error: anyerror!void) !void {
         \\    actual_error catch |err| {
         \\        if (err == expected_error) return {};
@@ -465,7 +516,7 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
         \\}
         ,
         .Debug = .{
-            .expect = 
+            .expect =
             \\error: TestExpectedError
             \\source.zig:9:18: [address] in foo (test)
             \\fn foo() !void { return error.Foo; }
@@ -483,7 +534,7 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
             .exclude_os = .{
                 .windows, // TODO
             },
-            .expect = 
+            .expect =
             \\error: TestExpectedError
             \\source.zig:9:18: [address] in [function]
             \\fn foo() !void { return error.Foo; }
@@ -498,13 +549,13 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
             ,
         },
         .ReleaseFast = .{
-            .expect = 
+            .expect =
             \\error: TestExpectedError
             \\
             ,
         },
         .ReleaseSmall = .{
-            .expect = 
+            .expect =
             \\error: TestExpectedError
             \\
             ,
@@ -513,7 +564,7 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
 
     cases.addCase(.{
         .name = "try return from within catch",
-        .source = 
+        .source =
         \\fn foo() !void {
         \\    return error.TheSkyIsFalling;
         \\}
@@ -529,7 +580,7 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
         \\}
         ,
         .Debug = .{
-            .expect = 
+            .expect =
             \\error: AndMyCarIsOutOfGas
             \\source.zig:2:5: [address] in foo (test)
             \\    return error.TheSkyIsFalling;
@@ -547,7 +598,7 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
             .exclude_os = .{
                 .windows, // TODO
             },
-            .expect = 
+            .expect =
             \\error: AndMyCarIsOutOfGas
             \\source.zig:2:5: [address] in [function]
             \\    return error.TheSkyIsFalling;
@@ -562,13 +613,13 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
             ,
         },
         .ReleaseFast = .{
-            .expect = 
+            .expect =
             \\error: AndMyCarIsOutOfGas
             \\
             ,
         },
         .ReleaseSmall = .{
-            .expect = 
+            .expect =
             \\error: AndMyCarIsOutOfGas
             \\
             ,
@@ -577,7 +628,7 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
 
     cases.addCase(.{
         .name = "try return from within if-else",
-        .source = 
+        .source =
         \\fn foo() !void {
         \\    return error.TheSkyIsFalling;
         \\}
@@ -593,7 +644,7 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
         \\}
         ,
         .Debug = .{
-            .expect = 
+            .expect =
             \\error: AndMyCarIsOutOfGas
             \\source.zig:2:5: [address] in foo (test)
             \\    return error.TheSkyIsFalling;
@@ -611,7 +662,7 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
             .exclude_os = .{
                 .windows, // TODO
             },
-            .expect = 
+            .expect =
             \\error: AndMyCarIsOutOfGas
             \\source.zig:2:5: [address] in [function]
             \\    return error.TheSkyIsFalling;
@@ -626,13 +677,13 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
             ,
         },
         .ReleaseFast = .{
-            .expect = 
+            .expect =
             \\error: AndMyCarIsOutOfGas
             \\
             ,
         },
         .ReleaseSmall = .{
-            .expect = 
+            .expect =
             \\error: AndMyCarIsOutOfGas
             \\
             ,
@@ -641,7 +692,7 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
 
     cases.addCase(.{
         .name = "try try return return",
-        .source = 
+        .source =
         \\fn foo() !void {
         \\    try bar();
         \\}
@@ -659,7 +710,7 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
         \\}
         ,
         .Debug = .{
-            .expect = 
+            .expect =
             \\error: TheSkyIsFalling
             \\source.zig:10:5: [address] in make_error (test)
             \\    return error.TheSkyIsFalling;
@@ -680,7 +731,7 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
             .exclude_os = .{
                 .windows, // TODO
             },
-            .expect = 
+            .expect =
             \\error: TheSkyIsFalling
             \\source.zig:10:5: [address] in [function]
             \\    return error.TheSkyIsFalling;
@@ -698,13 +749,13 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
             ,
         },
         .ReleaseFast = .{
-            .expect = 
+            .expect =
             \\error: TheSkyIsFalling
             \\
             ,
         },
         .ReleaseSmall = .{
-            .expect = 
+            .expect =
             \\error: TheSkyIsFalling
             \\
             ,
@@ -717,7 +768,7 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
             .windows, // TODO intermittent failures
         },
         .name = "dumpCurrentStackTrace",
-        .source = 
+        .source =
         \\const std = @import("std");
         \\
         \\fn bar() void {
@@ -732,7 +783,7 @@ pub fn addCases(cases: *tests.StackTracesContext) void {
         \\}
         ,
         .Debug = .{
-            .expect = 
+            .expect =
             \\source.zig:7:8: [address] in foo (test)
             \\    bar();
             \\       ^
